@@ -8,6 +8,8 @@
 import SwiftUI
 import ComposableArchitecture
 
+// TCA 사용 -> 모든 feature로직이 값 타입으로 모델링되고, Single 리듀서 안에서 캡슐화되어있음
+
 struct CounterFeature: Reducer {
     struct State: Equatable {
         var count = 0
@@ -21,6 +23,7 @@ struct CounterFeature: Reducer {
     // 유저가 하는 행동을 literally 하게 표현할 것
     enum Action {
         case decrementButtonTapped
+        case factResponse(String)
         case getFactButtonTapped
         case incrementButtonTapped
         case toggleTimerButtonTapped
@@ -33,12 +36,33 @@ struct CounterFeature: Reducer {
             switch action {
                 case .decrementButtonTapped:
                     state.count -= 1
+                    state.fact = nil
                     return .none // 바깥 세계에 아무 영향을 주지 않는 effect
+                case let .factResponse(fact):
+                    state.fact = fact
+                    return .none
                 case .getFactButtonTapped:
                     //TODO: perform network request
-                    return .none
+                    // send : 시스템으로 액션을 보낼 수 있게하는 값
+                    state.fact = nil
+                    return .run { [count = state.count] send in // 이 클로저는 async context
+                        let (data, _) = try await URLSession.shared.data(
+                            from: URL(string: "http://numbersapi.com/\(count)")!
+                        )
+                        let fact = String(decoding: data, as: UTF8.self)
+                        print(fact)
+                        
+                        // state.fact = fact // inout parameter 은 캡처될 수 없음
+                        // 바꿀 수 없는 건 값타입을 사용하는 비용임
+
+                        // Great guarantee but also cannot simply be mutated
+
+                        // 바꾸려면 Action 사용! 그냥 바꾸는건 안됨!
+                        await send(.factResponse(fact))
+                    }
                 case .incrementButtonTapped:
                     state.count += 1
+                    state.fact = nil
                     return .none
                 case .toggleTimerButtonTapped:
                     state.isTimerOn.toggle()
@@ -75,32 +99,38 @@ struct ContentView: View {
                         viewStore.send(.incrementButtonTapped)
                     }
                 }
-            }
-            Section {
-                Button("Get Fact") {
-                    viewStore.send(.getFactButtonTapped)
-                }
-                if let fact = viewStore.fact {
-                    Text(fact)
-                }
-            }
 
-            Section {
-                if viewStore.isTimerOn {
-                    Button("Stop Timer") {
-                        viewStore.send(.toggleTimerButtonTapped)
+                Section {
+                    Button("Get Fact") {
+                        viewStore.send(.getFactButtonTapped)
                     }
-                } else {
-                    Button("Start Timer") {
-                        viewStore.send(.toggleTimerButtonTapped)
+                    if let fact = viewStore.fact {
+                        Text(fact)
                     }
                 }
-            }
 
+                Section {
+                    if viewStore.isTimerOn {
+                        Button("Stop Timer") {
+                            viewStore.send(.toggleTimerButtonTapped)
+                        }
+                    } else {
+                        Button("Start Timer") {
+                            viewStore.send(.toggleTimerButtonTapped)
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(
+        store: Store(
+            initialState: CounterFeature.State()) {
+                CounterFeature()
+                    ._printChanges()
+            }
+    )
 }
