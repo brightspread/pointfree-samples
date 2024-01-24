@@ -9,7 +9,7 @@ import SwiftUI
 import ComposableArchitecture
 
 struct CounterFeature: Reducer {
-    struct State {
+    struct State: Equatable {
         var count = 0
         var fact: String?
         var isTimerOn = false
@@ -59,35 +59,45 @@ struct ContentView: View {
     let store: StoreOf<CounterFeature> // same as "Store<CounterFeature.State, CounterFeature.Action>"
 
     var body: some View {
-        Form {
+        //  observe: { $0 } 는 store의 모든 값을 관찰하겠다
+        // 전형적으로 모든 것을 관찰하는 건 옳지 않음
+        // 실제로 View에 필요한 것 보다 많은 state를 들고 있음
+
+        WithViewStore(self.store, observe: { $0 }) { viewStore in
+            Form {
+                Section {
+                    Text("\(viewStore.count)")
+
+                    Button("Decrement") {
+                        viewStore.send(.decrementButtonTapped)
+                    }
+                    Button("Increment") {
+                        viewStore.send(.incrementButtonTapped)
+                    }
+                }
+            }
             Section {
-                Text("0")
-
-                Button("Decrement") {
-
+                Button("Get Fact") {
+                    viewStore.send(.getFactButtonTapped)
                 }
-                Button("Increment") {
-
+                if let fact = viewStore.fact {
+                    Text(fact)
                 }
             }
-        }
-        Section {
-            Button("Get Fact") {
 
+            Section {
+                if viewStore.isTimerOn {
+                    Button("Stop Timer") {
+                        viewStore.send(.toggleTimerButtonTapped)
+                    }
+                } else {
+                    Button("Start Timer") {
+                        viewStore.send(.toggleTimerButtonTapped)
+                    }
+                }
             }
-            Text("Some fact")
+
         }
-
-        Section {
-            Button("Stop Timer") {
-
-            }
-            Button("Start Timer") {
-
-            }
-        }
-
-
     }
 }
 
